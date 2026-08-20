@@ -10,10 +10,11 @@ for _arg in "$@"; do
     case "$_arg" in
         --ksu)  KSU_VARIANT="ksu";  KSU_FLAG_COUNT=$((KSU_FLAG_COUNT + 1));;
         --ksun) KSU_VARIANT="ksun"; KSU_FLAG_COUNT=$((KSU_FLAG_COUNT + 1));;
+        --resukisu) KSU_VARIANT="resukisu"; KSU_FLAG_COUNT=$((KSU_FLAG_COUNT + 1));;
     esac
 done
 if [[ $KSU_FLAG_COUNT -gt 1 ]]; then
-    echo "Error: --ksu and --ksun are mutually exclusive; pass only one." >&2
+    echo "Error: --ksu, --ksun and --resukisu are mutually exclusive; pass only one." >&2
     exit 2
 fi
 
@@ -33,6 +34,14 @@ if [[ "$KSU_VARIANT" == "ksun" ]]; then
     KSU_LABEL="KernelSU"
     KSU_DISCORD_LABEL="KernelSU"
     SUSFS_KSU_INTERNAL_PATCH_DESC="upstream SUSFS patch (10_enable_susfs_for_ksu.patch)"
+    elif [[ "$KSU_VARIANT" == "resukisu" ]]; then
+    KERNELSU_SETUP_URL="https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh"
+    KERNELSU_SETUP_BRANCH="main"
+    BASE_KSU_VERSION=0
+    KSU_DIR="KernelSU"
+    KSU_LABEL="ReSukiSU"
+    KSU_DISCORD_LABEL="ReSukiSU"
+    SUSFS_KSU_INTERNAL_PATCH_DESC="native (ReSukiSU ships its own SUSFS hooks; no internal driver patch applied)"
 else
     KSU_DIR=""
     KSU_LABEL="None"
@@ -56,11 +65,7 @@ else
     DISCORD_USER_ID=""
 fi
 
-LOGFILE="$(pwd)/logs/build_${KSU_VARIANT}_$(date +%Y%m%d_%H%M%S).log"
-
-if [[ ! -d "$(pwd)/logs" ]]; then
-    mkdir -p "$(pwd)/logs"
-fi
+LOGFILE="/home/kkdemergencia/Escritorio/build_${KSU_VARIANT}_$(date +%Y%m%d_%H%M%S).log"
 
 # Strip ANSI color codes from the log file output, but keep them in the terminal
 exec > >(tee >(sed "s/$(printf '\033')\\[[0-9;]*m//g" >> "$LOGFILE")) 2>&1
@@ -230,6 +235,7 @@ while [[ $# -gt 0 ]]; do
         --out-dir) OUT_DIR="$2"; shift 2;;
         --ksu) shift;;   # already handled by the pre-scan; consume it here so parsing doesn't error
         --ksun) shift;;  # already handled by the pre-scan; consume it here so parsing doesn't error
+        --resukisu) shift;;  # already handled by the pre-scan; consume it here so parsing doesn't error
         --no-clean) NO_CLEAN=1; shift;;
         --no-patch) NO_PATCH=1; shift;;
         --no-susfs) NO_SUSFS=1; shift;;
@@ -246,6 +252,7 @@ Options:
   --out-dir DIR        Output directory for build artifacts (default: ${DEFAULT_OUT})
   --ksu                Build against upstream KernelSU (main branch)
   --ksun               Build against KernelSU-Next (dev branch)
+  --resukisu           Build against ReSukiSU (main branch, SUSFS built-in)
   --no-clean           Skip running clean_build.sh
   --no-patch           Skip patching steps / KernelSU setup
   --no-susfs           Skip SUSFS related config & patches
@@ -547,7 +554,11 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
         if [[ -d "./$KSU_DIR" ]]; then
             # Version Detection
             pushd "./$KSU_DIR/kernel" > /dev/null
-            BASE_VERSION=$(grep -m1 -oP 'expr\s*\K[0-9]+' Kbuild)
+            BASE_VERSION=$(grep -m1 -oP 'expr\s*\K[0-9]+' Kbuild || true)
+            if [[ -z "$BASE_VERSION" ]]; then
+                warn -n "Could not find the 'expr N' version-stamp pattern in $KSU_LABEL's Kbuild; falling back to BASE_KSU_VERSION=$BASE_KSU_VERSION"
+                BASE_VERSION=$BASE_KSU_VERSION
+            fi
             info -n "Detected $KSU_LABEL Base Version: $BASE_VERSION"
             
             KSU_VERSION=$(expr $(git rev-list --count HEAD) "+" $BASE_VERSION)
@@ -592,11 +603,15 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
                 
                 # Patch $KSU_LABEL internal
                 pushd "./$KSU_DIR" > /dev/null
-                info -n "Patching SUSFS into $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)..."
-                if [[ "$KSU_VARIANT" == "ksun" ]]; then
-                    patch -p1 --forward < $PATCHES/10_pershoot_enable_susfs_for_ksun.patch || true
+                if [[ "$KSU_VARIANT" == "resukisu" ]]; then
+                    info -n "Skipping internal SUSFS patch for $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)"
                 else
-                    patch -p1 --forward < $SUSFS_PATCHES/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+                    info -n "Patching SUSFS into $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)..."
+                    if [[ "$KSU_VARIANT" == "ksun" ]]; then
+                        patch -p1 --forward < $PATCHES/10_pershoot_enable_susfs_for_ksun.patch || true
+                    else
+                        patch -p1 --forward < $SUSFS_PATCHES/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+                    fi
                 fi
                 
                 REJ_FILES=$(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;)
@@ -770,3 +785,50 @@ popd > /dev/null
 BUILD_END=$(_ts)
 info -n "Build completed successfully."
 send_discord_file "SUCCESS" "Kernel build completed successfully. 🎉" 65280
+
+# 7. Repack into a flashable boot image using the proven manual pipeline
+#    (magiskboot + avbtool from kerneltree_poqdavid/scripts/bin), not the
+#    untested ./scripts/repack helper.
+repack_boot_image() {
+    info -n "Repacking kernel into flashable boot image..."
+
+    local OLD_TREE_BIN="/home/kkdemergencia/Descargas/workspace/kerneltree_poqdavid/scripts/bin"
+    local MAGISKBOOT="$OLD_TREE_BIN/magiskboot"
+    local AVBTOOL="$OLD_TREE_BIN/avb/avbtool.py"
+    local SIGN_KEY="$OLD_TREE_BIN/certs/sign.pk8"
+    local REFERENCE_BOOT="/home/kkdemergencia/Escritorio/bootpoqdavid.img"
+    local WORKDIR="$OLD_TREE_BIN/workspace"
+    local KERNEL_IMAGE="$(pwd)/out/target/product/a15/obj/KERNEL_OBJ/${KERNEL_DIR}/arch/arm64/boot/Image"
+    local OUTPUT_NAME="boot_${KSU_VARIANT}.img"
+    [[ "$KSU_VARIANT" == "none" ]] && OUTPUT_NAME="boot_vanilla.img"
+    local OUTPUT_PATH="/home/kkdemergencia/Escritorio/$OUTPUT_NAME"
+
+    if [[ ! -f "$KERNEL_IMAGE" ]]; then
+        warn -n "Repack skipped: kernel Image not found at $KERNEL_IMAGE"
+        return 0
+    fi
+    if [[ ! -x "$MAGISKBOOT" ]]; then
+        warn -n "Repack skipped: magiskboot not found/executable at $MAGISKBOOT"
+        return 0
+    fi
+    if [[ ! -f "$REFERENCE_BOOT" ]]; then
+        warn -n "Repack skipped: reference boot image not found at $REFERENCE_BOOT"
+        return 0
+    fi
+
+    mkdir -p "$WORKDIR"
+    rm -rf "${WORKDIR:?}"/* 2>/dev/null
+
+    pushd "$WORKDIR" > /dev/null
+    "$MAGISKBOOT" unpack -n "$REFERENCE_BOOT"
+    cp -f "$KERNEL_IMAGE" ./kernel
+    "$MAGISKBOOT" repack "$REFERENCE_BOOT" ./new-boot.img
+    python3 "$AVBTOOL" add_hash_footer --partition_name boot --partition_size 67108864 \
+        --image ./new-boot.img --algorithm SHA256_RSA4096 --key "$SIGN_KEY"
+    cp -f ./new-boot.img "$OUTPUT_PATH"
+    popd > /dev/null
+
+    info -n "Repack complete: $OUTPUT_PATH"
+}
+
+repack_boot_image || warn -n "Repack step failed; the kernel build itself still succeeded. You can repack manually from ${OUT_DIR}/${KERNEL_DIR}/arch/arm64/boot/Image"
