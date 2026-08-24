@@ -491,6 +491,32 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         --set-val NF_NAT_IPV6 y \
         --set-val IP6_NF_TARGET_MASQUERADE y
         
+        info "Adding rtl8188eu external WiFi driver support..."
+        # External USB WiFi adapter (aircrack-ng fork, monitor mode). Independent
+        # of the internal MTK combo chip's closed firmware, which cannot do
+        # monitor mode. Driver is fetched fresh into the tree during the patch
+        # step below, since kernel-5.10/ is fully disposable between builds.
+        $CONFIG_TOOL --file $DEFCONFIG \
+        --set-val RTL8188EU m
+        
+        info "Adding container/Droidbian Linux-parity support..."
+        # Docker/podman/systemd-nspawn check for these specifically at startup;
+        # without them containers either refuse to start (DEVPTS_MULTIPLE_INSTANCES
+        # is a hard requirement for systemd-nspawn) or silently run without real
+        # isolation/limits (the missing cgroup controllers).
+        $CONFIG_TOOL --file $DEFCONFIG \
+        --set-val SQUASHFS y \
+        --set-val CGROUP_PIDS y \
+        --set-val CGROUP_DEVICE y \
+        --set-val CGROUP_NET_CLS y \
+        --set-val CGROUP_HUGETLB y \
+        --set-val DEVPTS_MULTIPLE_INSTANCES y \
+        --set-val CHECKPOINT_RESTORE y \
+        --set-val VXLAN m \
+        --set-val MACVLAN m \
+        --set-val IPVLAN m \
+        --set-val VLAN_8021Q m
+        
         if [[ "$KSU_VARIANT" != "none" ]]; then
             info -n "Setting $KSU_LABEL & SUSFS configs..."
             # KernelSU & SUSFS
@@ -766,6 +792,16 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
     else
         info -n "No specific NTSync compat patch found for Android $android_version / Kernel $kernel_version; skipping compat patch."
     fi
+    
+    info -n "Fetching rtl8188eu driver (aircrack-ng fork, monitor mode support)..."
+    RTL8188EU_DIR="drivers/net/wireless/realtek/rtl8188eu"
+    rm -rf "$RTL8188EU_DIR"
+    git clone --depth 1 --branch v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git "$RTL8188EU_DIR"
+    rm -rf "$RTL8188EU_DIR/.git"
+    
+    info -n "Hooking rtl8188eu into drivers/net/wireless/realtek Kconfig/Makefile..."
+    sed -i '/source "drivers\/net\/wireless\/realtek\/rtw88\/Kconfig"/a source "drivers/net/wireless/realtek/rtl8188eu/Kconfig"' drivers/net/wireless/realtek/Kconfig
+    sed -i '/obj-\$(CONFIG_RTW88)[[:space:]]*+= rtw88\//a obj-$(CONFIG_RTL8188EU)          += rtl8188eu/' drivers/net/wireless/realtek/Makefile
     
     popd > /dev/null
     PATCH_END=$(_ts)
