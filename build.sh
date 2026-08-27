@@ -41,7 +41,7 @@ if [[ "$KSU_VARIANT" == "ksun" ]]; then
     KSU_DIR="KernelSU"
     KSU_LABEL="ReSukiSU"
     KSU_DISCORD_LABEL="ReSukiSU"
-    SUSFS_KSU_INTERNAL_PATCH_DESC="native (ReSukiSU ships its own SUSFS hooks; no internal driver patch applied)"
+    SUSFS_KSU_INTERNAL_PATCH_DESC="pershoot-fork SUSFS patch (10_pershoot_enable_susfs_for_ksun.patch); confirmed required for ReSukiSU too, same glue KSUN needs"
 else
     KSU_DIR=""
     KSU_LABEL="None"
@@ -629,15 +629,11 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
                 
                 # Patch $KSU_LABEL internal
                 pushd "./$KSU_DIR" > /dev/null
-                if [[ "$KSU_VARIANT" == "resukisu" ]]; then
-                    info -n "Skipping internal SUSFS patch for $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)"
+                info -n "Patching SUSFS into $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)..."
+                if [[ "$KSU_VARIANT" == "ksun" || "$KSU_VARIANT" == "resukisu" ]]; then
+                    patch -p1 --forward < $PATCHES/10_pershoot_enable_susfs_for_ksun.patch || true
                 else
-                    info -n "Patching SUSFS into $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)..."
-                    if [[ "$KSU_VARIANT" == "ksun" ]]; then
-                        patch -p1 --forward < $PATCHES/10_pershoot_enable_susfs_for_ksun.patch || true
-                    else
-                        patch -p1 --forward < $SUSFS_PATCHES/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
-                    fi
+                    patch -p1 --forward < $SUSFS_PATCHES/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
                 fi
                 
                 REJ_FILES=$(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;)
@@ -798,6 +794,12 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
     rm -rf "$RTL8188EU_DIR"
     git clone --depth 1 --branch v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git "$RTL8188EU_DIR"
     rm -rf "$RTL8188EU_DIR/.git"
+    
+    info -n "Fixing deprecated ---help--- Kconfig syntax in rtl8188eu..."
+    # Modern kconfig parsers (this tree included) dropped support for the old
+    # '---help---' marker; the aircrack-ng Kconfig still uses it, which throws
+    # a hard syntax error and aborts gki_defconfig before anything compiles.
+    sed -i 's/---help---/help/' "$RTL8188EU_DIR/Kconfig"
     
     info -n "Hooking rtl8188eu into drivers/net/wireless/realtek Kconfig/Makefile..."
     sed -i '/source "drivers\/net\/wireless\/realtek\/rtw88\/Kconfig"/a source "drivers/net/wireless/realtek/rtl8188eu/Kconfig"' drivers/net/wireless/realtek/Kconfig
