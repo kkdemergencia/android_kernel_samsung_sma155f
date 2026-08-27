@@ -41,7 +41,8 @@ if [[ "$KSU_VARIANT" == "ksun" ]]; then
     KSU_DIR="KernelSU"
     KSU_LABEL="ReSukiSU"
     KSU_DISCORD_LABEL="ReSukiSU"
-    SUSFS_KSU_INTERNAL_PATCH_DESC="pershoot-fork SUSFS patch (10_pershoot_enable_susfs_for_ksun.patch); confirmed required for ReSukiSU too, same glue KSUN needs"
+    SUSFS_KSU_INTERNAL_PATCH_DESC="native (ReSukiSU ships its own SUSFS hooks; no internal driver patch applied)"
+    RESUKISU_PIN_COMMIT="cdce8bb8"
 else
     KSU_DIR=""
     KSU_LABEL="None"
@@ -578,6 +579,17 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
         curl -LSs $KERNELSU_SETUP_URL | bash -s $KERNELSU_SETUP_BRANCH
         
         if [[ -d "./$KSU_DIR" ]]; then
+            if [[ "$KSU_VARIANT" == "resukisu" && -n "${RESUKISU_PIN_COMMIT:-}" ]]; then
+                info -n "Pinning ReSukiSU to known-good commit $RESUKISU_PIN_COMMIT (main HEAD has drifted ahead of a SUSFS API this tree provides)..."
+                pushd "./$KSU_DIR" > /dev/null
+                if ! git checkout "$RESUKISU_PIN_COMMIT" 2>/dev/null; then
+                    warn -n "Direct checkout failed (likely a shallow clone); fetching full history and retrying..."
+                    git fetch --unshallow 2>/dev/null || git fetch --depth=1000 origin main
+                    git checkout "$RESUKISU_PIN_COMMIT"
+                fi
+                popd > /dev/null
+            fi
+            
             # Version Detection
             pushd "./$KSU_DIR/kernel" > /dev/null
             BASE_VERSION=$(grep -m1 -oP 'expr\s*\K[0-9]+' Kbuild || true)
@@ -629,11 +641,15 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
                 
                 # Patch $KSU_LABEL internal
                 pushd "./$KSU_DIR" > /dev/null
-                info -n "Patching SUSFS into $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)..."
-                if [[ "$KSU_VARIANT" == "ksun" || "$KSU_VARIANT" == "resukisu" ]]; then
-                    patch -p1 --forward < $PATCHES/10_pershoot_enable_susfs_for_ksun.patch || true
+                if [[ "$KSU_VARIANT" == "resukisu" ]]; then
+                    info -n "Skipping internal SUSFS patch for $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)"
                 else
-                    patch -p1 --forward < $SUSFS_PATCHES/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+                    info -n "Patching SUSFS into $KSU_LABEL ($SUSFS_KSU_INTERNAL_PATCH_DESC)..."
+                    if [[ "$KSU_VARIANT" == "ksun" ]]; then
+                        patch -p1 --forward < $PATCHES/10_pershoot_enable_susfs_for_ksun.patch || true
+                    else
+                        patch -p1 --forward < $SUSFS_PATCHES/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+                    fi
                 fi
                 
                 REJ_FILES=$(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;)
