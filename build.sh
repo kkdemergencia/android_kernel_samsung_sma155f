@@ -845,18 +845,18 @@ send_discord_file "SUCCESS" "Kernel build completed successfully. 🎉" 65280
 #    untested ./scripts/repack helper.
 repack_boot_image() {
     info -n "Repacking kernel into flashable boot image..."
-
-    local OLD_TREE_BIN="/home/kkdemergencia/Descargas/workspace/kerneltree_poqdavid/scripts/bin"
-    local MAGISKBOOT="$OLD_TREE_BIN/magiskboot"
-    local AVBTOOL="$OLD_TREE_BIN/avb/avbtool.py"
-    local SIGN_KEY="$OLD_TREE_BIN/certs/sign.pk8"
+    local TOOLS_BIN="/home/kkdemergencia/Descargas/workspace/poqdavid_reference/scripts/bin"
+    local MAGISKBOOT="$TOOLS_BIN/magiskboot"
+    local AVBTOOL="$TOOLS_BIN/avb/avbtool.py"
+    local CERT_DIR="$TOOLS_BIN/certs"
+    local CERT_CONF="$TOOLS_BIN/samsung_cert.conf"
+    local SIGN_KEY="$CERT_DIR/sign.pk8"
     local REFERENCE_BOOT="/home/kkdemergencia/Escritorio/bootpoqdavid.img"
-    local WORKDIR="$OLD_TREE_BIN/workspace"
+    local WORKDIR="$TOOLS_BIN/workspace"
     local KERNEL_IMAGE="$(pwd)/out/target/product/a15/obj/KERNEL_OBJ/${KERNEL_DIR}/arch/arm64/boot/Image"
     local OUTPUT_NAME="boot_${KSU_VARIANT}.img"
     [[ "$KSU_VARIANT" == "none" ]] && OUTPUT_NAME="boot_vanilla.img"
     local OUTPUT_PATH="/home/kkdemergencia/Escritorio/$OUTPUT_NAME"
-
     if [[ ! -f "$KERNEL_IMAGE" ]]; then
         warn -n "Repack skipped: kernel Image not found at $KERNEL_IMAGE"
         return 0
@@ -869,20 +869,20 @@ repack_boot_image() {
         warn -n "Repack skipped: reference boot image not found at $REFERENCE_BOOT"
         return 0
     fi
-
+    if [[ ! -f "$SIGN_KEY" ]]; then
+        info -n "Signing key not found; generating a new one"
+        mkdir -p "$CERT_DIR"
+        openssl req -new -x509 -newkey rsa:4096 -keyout "$SIGN_KEY" -out "$CERT_DIR/sign.pem" -days 824 -nodes -sha256 -config "$CERT_CONF"
+    fi
     mkdir -p "$WORKDIR"
     rm -rf "${WORKDIR:?}"/* 2>/dev/null
-
     pushd "$WORKDIR" > /dev/null
     "$MAGISKBOOT" unpack -n "$REFERENCE_BOOT"
     cp -f "$KERNEL_IMAGE" ./kernel
     "$MAGISKBOOT" repack "$REFERENCE_BOOT" ./new-boot.img
-    python3 "$AVBTOOL" add_hash_footer --partition_name boot --partition_size 67108864 \
-        --image ./new-boot.img --algorithm SHA256_RSA4096 --key "$SIGN_KEY"
+    python3 "$AVBTOOL" add_hash_footer --partition_name boot --partition_size 67108864 --image ./new-boot.img --algorithm SHA256_RSA4096 --key "$SIGN_KEY"
     cp -f ./new-boot.img "$OUTPUT_PATH"
     popd > /dev/null
-
     info -n "Repack complete: $OUTPUT_PATH"
 }
-
-repack_boot_image || warn -n "Repack step failed; the kernel build itself still succeeded. You can repack manually from ${OUT_DIR}/${KERNEL_DIR}/arch/arm64/boot/Image"
+repack_boot_image || warn -n "Repack step failed; kernel build succeeded, repack manually from Image"
