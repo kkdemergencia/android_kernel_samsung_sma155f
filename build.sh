@@ -817,6 +817,7 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
     # '---help---' marker; the aircrack-ng Kconfig still uses it, which throws
     # a hard syntax error and aborts gki_defconfig before anything compiles.
     sed -i 's/---help---/help/' "$RTL8188EU_DIR/Kconfig"
+    grep -rl "Wno-cast-function-type" "$RTL8188EU_DIR" 2>/dev/null | xargs -r sed -i "s/-Wno-cast-function-type//g"
     
     info -n "Hooking rtl8188eu into drivers/net/wireless/realtek Kconfig/Makefile..."
     sed -i '/source "drivers\/net\/wireless\/realtek\/rtw88\/Kconfig"/a source "drivers/net/wireless/realtek/rtl8188eu/Kconfig"' drivers/net/wireless/realtek/Kconfig
