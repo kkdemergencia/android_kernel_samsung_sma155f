@@ -498,6 +498,7 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         # monitor mode. Driver is fetched fresh into the tree during the patch
         # step below, since kernel-5.10/ is fully disposable between builds.
         $CONFIG_TOOL --file $DEFCONFIG \
+        --set-val WLAN_VENDOR_REALTEK y \
         --set-val RTL8188EU m
         
         info "Adding container/Droidbian Linux-parity support..."
