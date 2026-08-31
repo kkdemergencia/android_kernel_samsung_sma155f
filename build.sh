@@ -819,6 +819,11 @@ if [[ $NO_PATCH -eq 0 && $BUILD_ONLY -eq 0 ]]; then
     sed -i 's/---help---/help/' "$RTL8188EU_DIR/Kconfig"
     grep -rl "Wno-cast-function-type" "$RTL8188EU_DIR" 2>/dev/null | xargs -r sed -i "s/-Wno-cast-function-type//g"
     echo "ccflags-y += -Wno-error" >> "$RTL8188EU_DIR/Makefile"
+    RTL8188EU_NS_FILE=$(grep -rl "kernel_read\|filp_open" "$RTL8188EU_DIR" 2>/dev/null | grep "\.c$" | head -1)
+    if [[ -n "$RTL8188EU_NS_FILE" ]]; then
+        echo "" >> "$RTL8188EU_NS_FILE"
+        echo "MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);" >> "$RTL8188EU_NS_FILE"
+    fi
     
     info -n "Hooking rtl8188eu into drivers/net/wireless/realtek Kconfig/Makefile..."
     sed -i '/source "drivers\/net\/wireless\/realtek\/rtw88\/Kconfig"/a source "drivers/net/wireless/realtek/rtl8188eu/Kconfig"' drivers/net/wireless/realtek/Kconfig
