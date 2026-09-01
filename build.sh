@@ -508,11 +508,11 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         # isolation/limits (the missing cgroup controllers).
         $CONFIG_TOOL --file $DEFCONFIG \
         --set-val SQUASHFS y \
-        --set-val CGROUP_PIDS y \
-        --set-val CGROUP_DEVICE y \
-        --set-val CGROUP_NET_CLS y \
-        --set-val CGROUP_HUGETLB y \
-        --set-val DEVPTS_MULTIPLE_INSTANCES n \
+        --set-val CGROUP_PIDS n \
+        --set-val CGROUP_DEVICE n \
+        --set-val CGROUP_NET_CLS n \
+        --set-val CGROUP_HUGETLB n \
+        --set-val DEVPTS_MULTIPLE_INSTANCES y \
         --set-val CHECKPOINT_RESTORE y \
         --set-val VXLAN m \
         --set-val MACVLAN m \
