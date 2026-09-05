@@ -507,17 +507,17 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         # is a hard requirement for systemd-nspawn) or silently run without real
         # isolation/limits (the missing cgroup controllers).
         $CONFIG_TOOL --file $DEFCONFIG \
-        --set-val SQUASHFS n \
-        --set-val CGROUP_PIDS n \
+        --set-val SQUASHFS y \
+        --set-val CGROUP_PIDS y \
         --set-val CGROUP_DEVICE y \
-        --set-val CGROUP_NET_CLS n \
-        --set-val CGROUP_HUGETLB n \
-        --set-val DEVPTS_MULTIPLE_INSTANCES n \
-        --set-val CHECKPOINT_RESTORE n \
-        --set-val VXLAN n \
-        --set-val MACVLAN n \
-        --set-val IPVLAN n \
-        --set-val VLAN_8021Q n
+        --set-val CGROUP_NET_CLS y \
+        --set-val CGROUP_HUGETLB y \
+        --set-val DEVPTS_MULTIPLE_INSTANCES y \
+        --set-val CHECKPOINT_RESTORE y \
+        --set-val VXLAN m \
+        --set-val MACVLAN m \
+        --set-val IPVLAN m \
+        --set-val VLAN_8021Q m
         
         if [[ "$KSU_VARIANT" != "none" ]]; then
             info -n "Setting $KSU_LABEL & SUSFS configs..."
