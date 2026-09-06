@@ -516,8 +516,8 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         --set-val CHECKPOINT_RESTORE n \
         --set-val VXLAN m \
         --set-val MACVLAN m \
-        --set-val IPVLAN m \
-        --set-val VLAN_8021Q m
+        --set-val IPVLAN n \
+        --set-val VLAN_8021Q n
         
         if [[ "$KSU_VARIANT" != "none" ]]; then
             info -n "Setting $KSU_LABEL & SUSFS configs..."
