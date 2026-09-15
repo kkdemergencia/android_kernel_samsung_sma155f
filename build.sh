@@ -520,7 +520,7 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         --set-val VLAN_8021Q n
 
         info "Adding postmarketOS kconfig check requirements..."
-        $CONFIG_TOOL --file $DEFCONFIG --set-val FB y --set-val SYN_COOKIES y --set-val VT y --set-val DRM_FBDEV_EMULATION y --set-val UEVENT_HELPER y --set-val NULL_TTY m --set-val UDMABUF y
+        $CONFIG_TOOL --file $DEFCONFIG --set-val FB y --set-val SYN_COOKIES y --set-val VT y --set-val DRM_FBDEV_EMULATION n --set-val UEVENT_HELPER y --set-val NULL_TTY m --set-val UDMABUF y
         
         if [[ "$KSU_VARIANT" != "none" ]]; then
             info -n "Setting $KSU_LABEL & SUSFS configs..."
