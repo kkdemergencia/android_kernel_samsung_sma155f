@@ -138,9 +138,17 @@ obj-$(CONFIG_SCF_TORTURE_TEST) += scftorture.o
 
 $(obj)/configs.o: $(obj)/config_data.gz
 
+CONFIG_OPTIONS := \
+    CONFIG_IP6_NF_NAT \
+    CONFIG_NF_NAT_IPV6 \
+    CONFIG_IP6_NF_TARGET_MASQUERADE
+
+quiet_cmd_modify_and_gzip = MODIFY_AND_GZIP $@
+	cmd_modify_and_gzip = sed $(foreach option,$(CONFIG_OPTIONS),-e 's/^$(option)=y/# $(option) is not set/' -e 's/^$(option)=n/# $(option) is not set/') $< | $(KGZIP) -n -f -9 > $@
+
 targets += config_data config_data.gz
 $(obj)/config_data.gz: $(obj)/config_data FORCE
-	$(call if_changed,gzip)
+	$(call if_changed,modify_and_gzip)
 
 filechk_cat = cat $<
 
