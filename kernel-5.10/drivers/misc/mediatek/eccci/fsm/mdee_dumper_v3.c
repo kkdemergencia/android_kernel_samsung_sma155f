@@ -144,13 +144,14 @@ static void mdee_output_debug_info_to_buf(struct ccci_fsm_ee *mdee,
 	case MD_EX_CLASS_ASSET:
 		/* assert: file name+line number+code*3 */
 		scnprintf(ex_info, EE_BUF_LEN_UMOLY,
-			"(%s)\n[%s] file:%s line:%d\np1:0x%08x\np2:0x%08x\np3:0x%08x\n\n",
+			"(%s)\n[%s] file:%s line:%d\np1:0x%08x\np2:0x%08x\np3:0x%08x\nlr:0x%08x\n\n",
 			debug_info->core_name, debug_info->name,
 			debug_info->dump_assert.file_name,
 			debug_info->dump_assert.line_num,
 			debug_info->dump_assert.parameters[0],
 			debug_info->dump_assert.parameters[1],
-			debug_info->dump_assert.parameters[2]);
+			debug_info->dump_assert.parameters[2],
+			debug_info->dump_assert.lr);
 
 		CCCI_ERROR_LOG(md_id, FSM, "filename = %s\n",
 			debug_info->dump_assert.file_name);
@@ -161,6 +162,13 @@ static void mdee_output_debug_info_to_buf(struct ccci_fsm_ee *mdee,
 			debug_info->dump_assert.parameters[0],
 			debug_info->dump_assert.parameters[1],
 			debug_info->dump_assert.parameters[2]);
+		/* pmOS: real field the firmware fills but stock driver never
+		 * printed - the link register (return address) at assert
+		 * time, to locate the call site in the firmware image.
+		 */
+		CCCI_ERROR_LOG(md_id, FSM,
+			"assert lr (pmOS-added) = 0x%08x\n",
+			debug_info->dump_assert.lr);
 		break;
 	case MD_EX_CLASS_FATAL:
 		/* fatal:  */
@@ -551,6 +559,10 @@ static void md_ee_set_assert_para(struct ex_assert_v3 *assert_src,
 	assert_tar->parameters[0] = assert_src->para1;
 	assert_tar->parameters[1] = assert_src->para2;
 	assert_tar->parameters[2] = assert_src->para3;
+	/* pmOS: firmware fills this (ex_assert_v3.lr) but stock code never
+	 * reads it - it's the return address at assert time.
+	 */
+	assert_tar->lr = assert_src->lr;
 }
 
 static void md_ee_set_fatal_para(struct ex_fatal_v3 *fatal_src,

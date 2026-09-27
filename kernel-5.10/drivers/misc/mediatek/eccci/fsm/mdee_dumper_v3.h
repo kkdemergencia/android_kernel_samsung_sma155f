@@ -180,6 +180,10 @@ struct dump_info_assert {
 	char file_name[256]; /* use pCore: file path, contain file name */
 	int line_num;
 	unsigned int parameters[3];
+	unsigned int lr; /* pmOS: link register at assert time, real field the
+			   * firmware fills (ex_assert_v3.lr) but the stock
+			   * driver never extracted/printed - added to locate
+			   * the exact call site in the firmware image */
 };
 
 struct dump_info_fatal {
