@@ -1821,9 +1821,9 @@ int ccci_md_prepare_runtime_data(unsigned char md_id, unsigned char *data,
 		    md_feature_ap.feature_set[i].support_mask <
 			CCCI_FEATURE_MUST_SUPPORT) {
 			CCCI_BOOTUP_LOG(md->index, TAG,
-				"feature %u not support for AP\n",
-				rt_feature.feature_id);
-			return -1;
+				"pmOS: MD requires feature %u (MUST_SUPPORT) but AP marks it %u - continuing anyway to finish building runtime data\n",
+				rt_feature.feature_id,
+				md_feature_ap.feature_set[i].support_mask);
 		}
 
 		CCCI_DEBUG_LOG(md->index, TAG,
