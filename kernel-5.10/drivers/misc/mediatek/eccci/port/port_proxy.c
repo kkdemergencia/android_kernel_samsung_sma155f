@@ -643,6 +643,28 @@ long port_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		ret = put_user((unsigned int)sub_smem->size,
 				(unsigned int __user *)arg);
 		break;
+	/* pmOS: this ioctl has no real case in stock code (falls straight to
+	 * the "default: ret = -1" -> ccci_fsm_ioctl -> ENOTTY path). Wiring
+	 * it to the existing SMART_LOGGING smem region, same pattern as the
+	 * WIFI case above, to test whether that region is actually populated
+	 * on this device/DT and whether the modem writes anything to it.
+	 */
+	case CCCI_IOC_ALLOC_MD_LOG_MEM:
+		sub_smem = ccci_md_get_smem_by_user_id(port->md_id,
+						SMEM_USER_SMART_LOGGING);
+		if (!sub_smem || !sub_smem->base_ap_view_phy) {
+			CCCI_ERROR_LOG(port->md_id, TAG,
+				"pmOS: md log mem alloc: SMART_LOGGING smem not available (sub_smem=%p)\n",
+				sub_smem);
+			ret = -ENOMEM;
+			break;
+		}
+		CCCI_NORMAL_LOG(port->md_id, TAG,
+			"pmOS: md log mem alloc: phy=%lx size=%x\n",
+			(unsigned long)sub_smem->base_ap_view_phy, sub_smem->size);
+		ret = put_user((unsigned int)sub_smem->base_ap_view_phy,
+				(unsigned int __user *)arg);
+		break;
 	default:
 		ret = -1;
 		break;
