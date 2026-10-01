@@ -38,7 +38,22 @@ if [[ "$KSU_VARIANT" == "ksun" ]]; then
     SUSFS_BUILTIN=0
     elif [[ "$KSU_VARIANT" == "resukisu" ]]; then
     KERNELSU_SETUP_URL="https://raw.githubusercontent.com/poqdavid/ReSukiSU/main/kernel/setup.sh"
-    KERNELSU_SETUP_BRANCH="main"
+    # NOTE (2026-09-30): the generic SUSFS kernel patch failing 3 hunks here
+    # (fs/exec.c, fs/namespace.c, fs/proc/base.c) against a newer ReSukiSU is
+    # NOT actually broken - this script's own "Applying Samsung device
+    # patches" step right after already carries pre-made fix_exec.c.patch /
+    # fix_namespace.c.patch / fix_base.c.patch for SM-A155F-Oneui7 (part of
+    # poqdavid's shared multi-device patch set, patches/kernel_patches/samsung/)
+    # that repair exactly those hunks every time, regardless of which
+    # ReSukiSU version is checked out - confirmed by diffing build logs: the
+    # same clean "Patching namespace.c/base.c/exec.c" success sequence
+    # happened both with main HEAD and with a pinned old tag. Pinning to an
+    # old tag here does NOT fix anything that was actually broken - it was a
+    # wrong diagnosis chasing a red herring. See HANDOFF §8bd/§8be for the
+    # full story (the real cause of that night's bootloop was never
+    # confirmed; CONFIG_FTRACE_SYSCALLS was the only other change and is the
+    # remaining suspect, not yet tested in isolation).
+    KERNELSU_SETUP_BRANCH="v4.2.0-rc3"
     # ReSukiSU's own setup.sh always clones into ./KernelSU (same name --ksu uses).
     # That's fine: the variants are mutually exclusive and the clean step wipes
     # ./KernelSU either way, but avoid --no-clean when switching --ksu <-> --resukisu.
@@ -510,7 +525,14 @@ if [[ $BUILD_ONLY -eq 0 ]]; then
         # BBG support
         $CONFIG_TOOL --file $DEFCONFIG \
         --set-val BBG y
-        
+
+        info "Adding FTRACE_SYSCALLS support (for openat/exit_group tracepoints)..."
+        # a15_00_defconfig gets regenerated/reset by this script's own git-tracked
+        # baseline on every run, so pre-editing the defconfig file by hand never
+        # survives a build - it must be added here as its own --set-val.
+        $CONFIG_TOOL --file $DEFCONFIG \
+        --set-val FTRACE_SYSCALLS y
+
         info "Adding Droidspaces support..."
         # Droidspaces support
         $CONFIG_TOOL --file $DEFCONFIG \
